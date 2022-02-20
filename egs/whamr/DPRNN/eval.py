@@ -1,6 +1,5 @@
 import os
 import random
-import warnings
 import soundfile as sf
 import torch
 import yaml
@@ -10,14 +9,12 @@ import pandas as pd
 from tqdm import tqdm
 from pprint import pprint
 
-from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
+from asteroid import DPRNNTasNet
 from asteroid.metrics import get_metrics
-from asteroid.data import WhamRDataset
+from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
+from asteroid.data.whamr_dataset import WhamRDataset
+from asteroid.models import save_publishable
 from asteroid.utils import tensors_to_device
-
-from model import load_best_model
-
-warnings.simplefilter("ignore", UserWarning)
 
 
 parser = argparse.ArgumentParser()
@@ -28,21 +25,28 @@ parser.add_argument(
     help="One of `enh_single`, `enh_both`, " "`sep_clean` or `sep_noisy`",
 )
 parser.add_argument(
-    "--test_dir", type=str, required=True, help="Test directory including the json files"
+    "--test_dir",
+    type=str,
+    required=True,
+    help="Test directory including the json files",
 )
 parser.add_argument(
     "--use_gpu", type=int, default=0, help="Whether to use the GPU for model execution"
 )
 parser.add_argument("--exp_dir", default="exp/tmp", help="Experiment root")
 parser.add_argument(
-    "--n_save_ex", type=int, default=50, help="Number of audio examples to save, -1 means all"
+    "--n_save_ex",
+    type=int,
+    default=50,
+    help="Number of audio examples to save, -1 means all",
 )
 
 compute_metrics = ["si_sdr", "sdr", "sir", "sar", "stoi"]
 
 
 def main(conf):
-    model = load_best_model(conf["train_conf"], conf["exp_dir"])
+    model_path = os.path.join(conf["exp_dir"], "best_model.pth")
+    model = DPRNNTasNet.from_pretrained(model_path)
     # Handle device placement
     if conf["use_gpu"]:
         model.cuda()
@@ -51,7 +55,7 @@ def main(conf):
         conf["test_dir"],
         conf["task"],
         sample_rate=conf["sample_rate"],
-        nondefault_nsrc=model.n_src,
+        nondefault_nsrc=model.masker.n_src,
         segment=None,
     )  # Uses all segment length
     # Used to reorder sources only
@@ -89,7 +93,11 @@ def main(conf):
             sf.write(local_save_dir + "mixture.wav", mix_np[0], conf["sample_rate"])
             # Loop over the sources and estimates
             for src_idx, src in enumerate(sources_np):
-                sf.write(local_save_dir + "s{}.wav".format(src_idx + 1), src, conf["sample_rate"])
+                sf.write(
+                    local_save_dir + "s{}.wav".format(src_idx + 1),
+                    src,
+                    conf["sample_rate"],
+                )
             for src_idx, est_src in enumerate(est_sources_np):
                 sf.write(
                     local_save_dir + "s{}_estimate.wav".format(src_idx + 1),
@@ -115,6 +123,14 @@ def main(conf):
     pprint(final_results)
     with open(os.path.join(conf["exp_dir"], "final_metrics.json"), "w") as f:
         json.dump(final_results, f, indent=0)
+    model_dict = torch.load(model_path, map_location="cpu")
+
+    publishable = save_publishable(
+        os.path.join(conf["exp_dir"], "publish_dir"),
+        model_dict,
+        metrics=final_results,
+        train_conf=train_conf,
+    )
 
 
 if __name__ == "__main__":

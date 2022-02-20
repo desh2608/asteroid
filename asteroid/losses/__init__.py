@@ -1,6 +1,7 @@
 from .pit_wrapper import PITLossWrapper
 from .mixit_wrapper import MixITLossWrapper
 from .sinkpit_wrapper import SinkPITLossWrapper
+from .graphpit_wrapper import GraphPITLossWrapper
 from .sdr import PairwiseNegSDR
 from .sdr import pairwise_neg_sisdr, singlesrc_neg_sisdr, multisrc_neg_sisdr
 from .sdr import pairwise_neg_sdsdr, singlesrc_neg_sdsdr, multisrc_neg_sdsdr
@@ -24,6 +25,7 @@ __all__ = [
     "PITLossWrapper",
     "MixITLossWrapper",
     "SinkPITLossWrapper",
+    "GraphPITLossWrapper",
     "PairwiseNegSDR",
     "singlesrc_neg_sisdr",
     "pairwise_neg_sisdr",

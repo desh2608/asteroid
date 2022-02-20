@@ -14,7 +14,7 @@ sphere_dir=  # Directory containing sphere files
 # If you already have wsj0 wav files, specify the path to the directory here and start from stage 1
 wsj0_wav_dir=
 # If you already have the WHAM mixtures, specify the path to the directory here and start from stage 2
-whamr_wav_dir=
+whamr_wav_dir=/expscratch/mmaciejewski/whamr
 # After running the recipe a first time, you can run it from stage 3 directly to train new models.
 
 # Path to the python you'll use for the experiment. Defaults to the current python
@@ -28,7 +28,7 @@ python_path=python
 stage=0  # Controls from which stage to start
 tag=""  # Controls the directory name associated to the experiment
 # You can ask for several GPUs using id (passed to CUDA_VISIBLE_DEVICES)
-id=$CUDA_VISIBLE_DEVICES
+ngpu=4
 
 # Data
 task=sep_clean  # Specify the task here (sep_clean, sep_noisy, sep_reverb, sep_reverb_noisy)
@@ -38,16 +38,18 @@ nondefault_src=  # If you want to train a network with 3 output streams for exam
 data_dir=data  # Local data directory (No disk space needed)
 
 # Training
-batch_size=8
-num_workers=8
-#optimizer=adam
+batch_size=32
+num_workers=16
+optimizer=adam
 lr=0.001
 epochs=200
+weight_decay=0.00001
 
-# Architecture
-n_blocks=8
-n_repeats=3
-mask_nonlinear=relu
+# Architecture config
+# kernel_size=2
+# stride=8
+# chunk_size=100
+# hop_size=50
 
 # Evaluation
 eval_use_gpu=1
@@ -75,8 +77,8 @@ fi
 if [[ $stage -le  2 ]]; then
   # Make json directories with min/max modes and sampling rates
   echo "Stage 2: Generating json files including wav path and duration"
-  for sr_string in 8 16; do
-    for mode_option in min max; do
+  for sr_string in 16; do
+    for mode_option in min; do
       tmp_dumpdir=data/wav${sr_string}k/$mode_option
       echo "Generating json files in $tmp_dumpdir"
       [[ ! -d $tmp_dumpdir ]] && mkdir -p $tmp_dumpdir
@@ -91,7 +93,7 @@ uuid=$($python_path -c 'import uuid, sys; print(str(uuid.uuid4())[:8])')
 if [[ -z ${tag} ]]; then
   tag=${task}_${sr_string}k${mode}_${uuid}
 fi
-expdir=exp/train_convtasnet_${tag}
+expdir=exp/train_dprnn_${tag}
 mkdir -p $expdir && echo $uuid >> $expdir/run_uuid.txt
 echo "Results from the following experiment will be stored in $expdir"
 
@@ -117,8 +119,8 @@ echo "Results from the following experiment will be stored in $expdir"
 if [[ $stage -le 3 ]]; then
   echo "Stage 3: Training"
   mkdir -p logs
-   utils/queue-freegpu.pl -l "hostname=c*" --mem 4G --gpu 1 $expdir/train.log \
-     python train.py \
+  queue-freegpu.pl --mem 4G --gpu 4 --config conf/gpu.conf $expdir/train.log \
+    python train.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
     --task $task \
@@ -127,18 +129,17 @@ if [[ $stage -le 3 ]]; then
     --epochs $epochs \
     --batch_size $batch_size \
     --num_workers $num_workers \
-    --mask_act $mask_nonlinear \
-    --n_blocks $n_blocks \
-    --n_repeats $n_repeats \
+    --optimizer $optimizer \
+    --weight_decay $weight_decay \
     --exp_dir ${expdir}/
 fi
-exit 1
+
 if [[ $stage -le 4 ]]; then
   echo "Stage 4 : Evaluation"
-  CUDA_VISIBLE_DEVICES=$id $python_path eval.py \
+  queue-freegpu.pl --mem 4G --gpu 1 --config conf/gpu.conf $expdir/decode.log \
+    python eval.py \
     --task $task \
     --test_dir $test_dir \
     --use_gpu $eval_use_gpu \
-    --exp_dir ${expdir} | tee logs/eval_${tag}.log
-  cp logs/eval_${tag}.log $expdir/eval.log
+    --exp_dir ${expdir}
 fi

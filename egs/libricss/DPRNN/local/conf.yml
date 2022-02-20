@@ -1,0 +1,39 @@
+# Filterbank config
+filterbank:
+  name: 'stft'
+  n_filters: 512
+  kernel_size: 128
+  stride: 32
+# Network config
+masknet:
+  in_chan: 512
+  n_src: 2
+  out_chan: 512
+  bn_chan: 256
+  hid_size: 256
+  chunk_size: 250
+  hop_size: 125
+  n_repeats: 6
+  mask_act: 'sigmoid'
+  bidirectional: true
+  dropout: 0.1
+# Training config
+training:
+  epochs: 200
+  batch_size: 4
+  num_workers: 4
+  half_lr: yes
+  early_stop: yes
+  gradient_clipping: 5
+# Optim config
+optim:
+  optimizer: adam
+  lr: 0.001
+  weight_decay: 1.0e-05
+# Data config
+data:
+  train_mix: data/librispeech/train-clean-100_mixed.jsonl
+  train_sources: data/librispeech/train-clean-100_sources.jsonl
+  valid_mix: data/librispeech/dev-clean_mixed.jsonl
+  valid_sources: data/librispeech/dev-clean_sources.jsonl
+  sample_rate: 8000

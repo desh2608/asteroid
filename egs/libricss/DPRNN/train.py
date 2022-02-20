@@ -5,14 +5,18 @@ import json
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+import torch.distributed as dist
 
-from asteroid.data.whamr_dataset import WhamRDataset
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, Callback
+
+from asteroid.data.lhotse_css_dataset import LhotseCSSDataset
 from asteroid.engine.optimizers import make_optimizer
 from asteroid.engine.system import System
-from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
-from asteroid.models import ConvTasNet
+from asteroid.losses import GraphPITLossWrapper
+from asteroid import DPRNNTasNet
+
+from lhotse.dataset.sampling import BucketingSampler, SimpleCutSampler
 
 
 # Keys which are not in the conf.yml file can be added here.
@@ -25,43 +29,90 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--exp_dir", default="exp/tmp", help="Full path to save best validation model"
 )
+parser.add_argument(
+    "--init-model", default=None, help="Full path to the model to initialize from"
+)
+
+
+class LhotseSamplerState(Callback):
+    r"""
+    Save the sampler state periodically at the time of checkpointing.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def on_save_checkpoint(self, trainer, pl_module, checkpoint):
+        """Save sampler state to checkpoint"""
+
+        state = pl_module.train_loader.sampler.state_dict()
+        checkpoint["sampler_state"] = state
+
+    def on_load_checkpoint(self, trainer, pl_module, callback_state):
+        """Load sampler state from checkpoint"""
+        pl_module.train_loader.sampler.load_state_dict(callback_state["sampler_state"])
+
+    def on_fit_start(self, trainer, pl_module):
+        """Set the world_size and rank in the sampler"""
+        sampler = pl_module.train_loader.sampler
+        sampler.world_size = dist.get_world_size()
+        sampler.rank = dist.get_rank()
 
 
 def main(conf):
-    train_set = WhamRDataset(
-        conf["data"]["train_dir"],
-        conf["data"]["task"],
+    train_set = LhotseCSSDataset(
+        conf["data"]["train_mix"],
+        conf["data"]["train_sources"],
         sample_rate=conf["data"]["sample_rate"],
-        nondefault_nsrc=conf["data"]["nondefault_nsrc"],
     )
-    val_set = WhamRDataset(
-        conf["data"]["valid_dir"],
-        conf["data"]["task"],
+    val_set = LhotseCSSDataset(
+        conf["data"]["valid_mix"],
+        conf["data"]["valid_sources"],
         sample_rate=conf["data"]["sample_rate"],
-        nondefault_nsrc=conf["data"]["nondefault_nsrc"],
+    )
+
+    train_sampler = BucketingSampler(
+        train_set.mix,
+        sampler_type=SimpleCutSampler,
+        max_duration=conf["training"]["batch_size"],
+        shuffle=True,
+        num_buckets=20,
+        bucket_method="equal_duration",
+    )
+    val_sampler = BucketingSampler(
+        val_set.mix,
+        sampler_type=SimpleCutSampler,
+        max_duration=conf["training"]["batch_size"],
+        shuffle=False,
+        num_buckets=10,
+        bucket_method="equal_duration",
     )
 
     train_loader = DataLoader(
         train_set,
-        shuffle=True,
-        batch_size=conf["training"]["batch_size"],
+        batch_size=None,
+        sampler=train_sampler,
         num_workers=conf["training"]["num_workers"],
-        drop_last=True,
     )
     val_loader = DataLoader(
         val_set,
-        shuffle=False,
-        batch_size=conf["training"]["batch_size"],
+        batch_size=None,
+        sampler=val_sampler,
         num_workers=conf["training"]["num_workers"],
-        drop_last=True,
     )
     # Update number of source values (It depends on the task)
     conf["masknet"].update({"n_src": train_set.n_src})
 
     # Define model and optimizer
-    model = ConvTasNet(
-        **conf["filterbank"], **conf["masknet"], sample_rate=conf["data"]["sample_rate"]
-    )
+    if conf["main_args"]["init_model"] is not None:
+        model = DPRNNTasNet.from_pretrained(conf["main_args"]["init_model"])
+    else:
+        model = DPRNNTasNet(
+            **conf["filterbank"],
+            **conf["masknet"],
+            sample_rate=conf["data"]["sample_rate"],
+        )
+
     optimizer = make_optimizer(model.parameters(), **conf["optim"])
     # Define scheduler
     scheduler = None
@@ -75,7 +126,7 @@ def main(conf):
         yaml.safe_dump(conf, outfile)
 
     # Define Loss function.
-    loss_func = PITLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
+    loss_func = GraphPITLossWrapper(assignment_solver="optimal_dynamic_programming")
     system = System(
         model=model,
         loss_func=loss_func,
@@ -89,10 +140,17 @@ def main(conf):
     # Define callbacks
     callbacks = []
     checkpoint_dir = os.path.join(exp_dir, "checkpoints/")
+
+    # Save model
     checkpoint = ModelCheckpoint(
         checkpoint_dir, monitor="val_loss", mode="min", save_top_k=5, verbose=True
     )
     callbacks.append(checkpoint)
+
+    # Save Lhotse sampler state and set DDP rank and world_size
+    sampler_state = LhotseSamplerState()
+    callbacks.append(sampler_state)
+
     if conf["training"]["early_stop"]:
         callbacks.append(
             EarlyStopping(monitor="val_loss", mode="min", patience=30, verbose=True)
@@ -100,16 +158,17 @@ def main(conf):
 
     # Don't ask GPU if they are not available.
     gpus = -1 if torch.cuda.is_available() else None
-    # distributed_backend = "ddp" if torch.cuda.is_available() else None
-    distributed_backend = None  # not available on CLSP
+    accelerator = "ddp" if torch.cuda.is_available() else None
     trainer = pl.Trainer(
         max_epochs=conf["training"]["epochs"],
+        progress_bar_refresh_rate=10,  # each batch takes longer since they are meetings
         callbacks=callbacks,
         default_root_dir=exp_dir,
         gpus=gpus,
-        distributed_backend=distributed_backend,
+        accelerator=accelerator,
         limit_train_batches=1.0,  # Useful for fast experiment
         gradient_clip_val=5.0,
+        replace_sampler_ddp=False,  # since we are providing our own custom sampler
     )
     trainer.fit(system)
 
