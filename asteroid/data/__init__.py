@@ -3,6 +3,7 @@ from .wham_dataset import WhamDataset
 from .whamr_dataset import WhamRDataset
 from .dns_dataset import DNSDataset
 from .lhotse_css_dataset import LhotseCSSDataset
+from .libricss_dataset import LibriCSSDataset
 from .librimix_dataset import LibriMix
 from .wsj0_mix import Wsj0mixDataset
 from .musdb18_dataset import MUSDB18Dataset
@@ -26,4 +27,5 @@ __all__ = [
     "DAMPVSEPSinglesDataset",
     "LibriVADDataset",
     "LhotseCSSDataset",
+    "LibriCSSDataset",
 ]

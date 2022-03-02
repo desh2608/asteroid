@@ -82,7 +82,10 @@ def get_metrics(
         metrics_list = [metrics_list]
     # For each utterance, we get a dictionary with the input and output metrics
     input_metrics = InputMetrics(
-        observation=mix, speech_source=clean, enable_si_sdr=True, sample_rate=sample_rate
+        observation=mix,
+        speech_source=clean,
+        enable_si_sdr=True,
+        sample_rate=sample_rate,
     )
     output_metrics = OutputMetrics(
         speech_prediction=estimate,
@@ -151,7 +154,13 @@ class MetricTracker:
         self._all_metrics = pd.DataFrame()
 
     def __call__(
-        self, *, mix: np.ndarray, clean: np.ndarray, estimate: np.ndarray, filename=None, **kwargs
+        self,
+        *,
+        mix: np.ndarray,
+        clean: np.ndarray,
+        estimate: np.ndarray,
+        filename=None,
+        **kwargs,
     ):
         """Compute metrics for mix/clean/estimate and log it to the class.
 
@@ -196,7 +205,9 @@ class MetricTracker:
             final_results[metric_name] = metrics_df[metric_name].mean()
             final_results[metric_name + "_imp"] = ldf.mean()
         if dump_path is not None:
-            dump_path = dump_path + ".json" if not dump_path.endswith(".json") else dump_path
+            dump_path = (
+                dump_path + ".json" if not dump_path.endswith(".json") else dump_path
+            )
             with open(dump_path, "w") as f:
                 json.dump(final_results, f, indent=0)
         return final_results
@@ -232,7 +243,9 @@ class WERTracker:
         self.model_name = model_name
         self.device = "cuda" if use_gpu else "cpu"
         d = ModelDownloader()
-        self.asr_model = Speech2Text(**d.download_and_unpack(model_name), device=self.device)
+        self.asr_model = Speech2Text(
+            **d.download_and_unpack(model_name), device=self.device
+        )
         self.input_txt_list = []
         self.clean_txt_list = []
         self.output_txt_list = []
@@ -288,7 +301,9 @@ class WERTracker:
         for tmp_id in wav_id:
             out_count = Counter(
                 self.hsdi(
-                    truth=self.trans_dic[tmp_id], hypothesis=txt, transformation=self.transformation
+                    truth=self.trans_dic[tmp_id],
+                    hypothesis=txt,
+                    transformation=self.transformation,
                 )
             )
             self.mix_counter += out_count
@@ -299,7 +314,9 @@ class WERTracker:
             txt = self.predict_hypothesis(wav)
             out_count = Counter(
                 self.hsdi(
-                    truth=self.trans_dic[tmp_id], hypothesis=txt, transformation=self.transformation
+                    truth=self.trans_dic[tmp_id],
+                    hypothesis=txt,
+                    transformation=self.transformation,
                 )
             )
             self.clean_counter += out_count
@@ -312,7 +329,9 @@ class WERTracker:
             txt = self.predict_hypothesis(est)
             out_count = Counter(
                 self.hsdi(
-                    truth=self.trans_dic[tmp_id], hypothesis=txt, transformation=self.transformation
+                    truth=self.trans_dic[tmp_id],
+                    hypothesis=txt,
+                    transformation=self.transformation,
                 )
             )
             self.est_counter += out_count
@@ -329,7 +348,9 @@ class WERTracker:
 
     @staticmethod
     def wer_from_hsdi(hits=0, substitutions=0, deletions=0, insertions=0):
-        wer = (substitutions + deletions + insertions) / (hits + substitutions + deletions)
+        wer = (substitutions + deletions + insertions) / (
+            hits + substitutions + deletions
+        )
         return wer
 
     @staticmethod
@@ -363,25 +384,36 @@ class WERTracker:
 
     def final_df(self):
         """Generate a MarkDown table, as done by ESPNet."""
-        mix_n_word = sum(self.mix_counter[k] for k in ["hits", "substitutions", "deletions"])
-        clean_n_word = sum(self.clean_counter[k] for k in ["hits", "substitutions", "deletions"])
-        est_n_word = sum(self.est_counter[k] for k in ["hits", "substitutions", "deletions"])
+        mix_n_word = sum(
+            self.mix_counter[k] for k in ["hits", "substitutions", "deletions"]
+        )
+        clean_n_word = sum(
+            self.clean_counter[k] for k in ["hits", "substitutions", "deletions"]
+        )
+        est_n_word = sum(
+            self.est_counter[k] for k in ["hits", "substitutions", "deletions"]
+        )
         mix_wer = self.wer_from_hsdi(**dict(self.mix_counter))
         clean_wer = self.wer_from_hsdi(**dict(self.clean_counter))
         est_wer = self.wer_from_hsdi(**dict(self.est_counter))
 
         mix_hsdi = [
-            self.mix_counter[k] for k in ["hits", "substitutions", "deletions", "insertions"]
+            self.mix_counter[k]
+            for k in ["hits", "substitutions", "deletions", "insertions"]
         ]
         clean_hsdi = [
-            self.clean_counter[k] for k in ["hits", "substitutions", "deletions", "insertions"]
+            self.clean_counter[k]
+            for k in ["hits", "substitutions", "deletions", "insertions"]
         ]
         est_hsdi = [
-            self.est_counter[k] for k in ["hits", "substitutions", "deletions", "insertions"]
+            self.est_counter[k]
+            for k in ["hits", "substitutions", "deletions", "insertions"]
         ]
         #                   Snt               Wrd         HSDI       Err     S.Err
         for_mix = [len(self.mix_counter), mix_n_word] + mix_hsdi + [mix_wer, "-"]
-        for_clean = [len(self.clean_counter), clean_n_word] + clean_hsdi + [clean_wer, "-"]
+        for_clean = (
+            [len(self.clean_counter), clean_n_word] + clean_hsdi + [clean_wer, "-"]
+        )
         for_est = [len(self.est_counter), est_n_word] + est_hsdi + [est_wer, "-"]
 
         table = [
@@ -390,7 +422,18 @@ class WERTracker:
             ["test_clean / separated"] + for_est,
         ]
         df = pd.DataFrame(
-            table, columns=["dataset", "Snt", "Wrd", "Corr", "Sub", "Del", "Ins", "Err", "S.Err"]
+            table,
+            columns=[
+                "dataset",
+                "Snt",
+                "Wrd",
+                "Corr",
+                "Sub",
+                "Del",
+                "Ins",
+                "Err",
+                "S.Err",
+            ],
         )
         return df
 
@@ -407,7 +450,9 @@ class F1Tracker(nn.Module):
 
     def forward(self, y_pred, y_true):
         tp = torch.sum(torch.logical_and(y_pred, y_true))
-        tn = torch.sum(torch.logical_and(torch.logical_not(y_pred), torch.logical_not(y_true)))
+        tn = torch.sum(
+            torch.logical_and(torch.logical_not(y_pred), torch.logical_not(y_true))
+        )
         fp = torch.sum(torch.logical_and(torch.logical_xor(y_pred, y_true), y_pred))
         fn = torch.sum(torch.logical_and(torch.logical_xor(y_pred, y_true), y_true))
         accuracy = (tp + tn) / (tp + tn + fp + fn)

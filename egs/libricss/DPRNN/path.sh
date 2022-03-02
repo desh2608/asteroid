@@ -8,6 +8,6 @@ export PYTHONUNBUFFERED=1
 export PATH=${PATH}:`pwd`/utils
 
 # Activate environment
-. /opt/anaconda2/etc/profile.d/conda.sh && conda deactivate && conda activate asteroid
+. /home/draj/anaconda3/etc/profile.d/conda.sh && conda deactivate && conda activate asteroid
 
 export LC_ALL=C

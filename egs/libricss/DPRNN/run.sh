@@ -6,9 +6,9 @@ set -e
 set -o pipefail
 
 # Corpus dir
-librispeech_dir=/export/common/data/corpora/ASR/openslr/SLR12/LibriSpeech
+librispeech_dir=/export/corpora5/LibriSpeech
 librispeech_ctm=data/librispeech_ctm
-libricss_dir=/exp/draj/corpora/LibriCSS
+libricss_dir=/export/c01/corpora6/LibriCSS
 
 # RIRs
 rir_dir=data/rirs
@@ -22,6 +22,7 @@ init_model=../../whamr/DPRNN/exp/train_dprnn_v4/best_model.pth
 # General
 stage=0  # Controls from which stage to start
 tag=""  # Controls the directory name associated to the experiment
+decode_tag=""  # Controls the directory name associated to the decoding
 # You can ask for several GPUs using id (passed to CUDA_VISIBLE_DEVICES)
 ngpu=1
 
@@ -73,7 +74,6 @@ fi
 
 if [[ $stage -le 3 ]]; then
   echo "Stage 3: Training"
-  # The "clean" versions of the mixtures will be used for mixture consistency loss
   queue-freegpu.pl --mem 8G --gpu 4 --config conf/gpu.conf $expdir/train.log \
     python train.py \
     --train_mix data/librispeech/train-clean-100_mixed${task_affix}.jsonl \
@@ -96,10 +96,14 @@ fi
 
 if [[ $stage -le 4 ]]; then
   echo "Stage 4 : Evaluation"
-  queue-freegpu.pl --mem 8G --gpu 1 --config conf/gpu.conf $expdir/decode.log \
+  queue-freegpu.pl --mem 8G --gpu 1 --config conf/gpu.conf $expdir/decode_${decode_tag}/decode.log \
     python eval.py \
     --task $task \
-    --test_dir $test_dir \
+    --test_dir data/libricss \
     --use_gpu $eval_use_gpu \
-    --exp_dir ${expdir}
+    --exp_dir ${expdir} \
+    --window-size 8 \
+    --hop-size 2 \
+    --decode_dir ${expdir}/decode_${decode_tag} \
+    --multi-channel
 fi
