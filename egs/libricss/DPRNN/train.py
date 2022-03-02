@@ -126,7 +126,10 @@ def main(conf):
         yaml.safe_dump(conf, outfile)
 
     # Define Loss function.
-    loss_func = GraphPITLossWrapper(assignment_solver="optimal_dynamic_programming")
+    loss_func = GraphPITLossWrapper(
+        assignment_solver="optimal_dynamic_programming",
+        mixture_consistency=conf["training"]["mixture_consistency"],
+    )
     system = System(
         model=model,
         loss_func=loss_func,

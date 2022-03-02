@@ -56,10 +56,16 @@ def main(conf):
         conf["task"],
         sample_rate=conf["sample_rate"],
         nondefault_nsrc=model.masker.n_src,
+        noise_src=conf["noise_src"],
         segment=None,
     )  # Uses all segment length
     # Used to reorder sources only
-    loss_func = PITLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
+    loss_func = PITLossWrapper(
+        pairwise_neg_sisdr,
+        pit_from="pw_mtx",
+        noise_src=conf["noise_src"],
+        mixture_consistency=conf["mixture_consistency"],
+    )
 
     # Randomly choose the indexes of sentences to save.
     ex_save_dir = os.path.join(conf["exp_dir"], "examples/")
@@ -72,8 +78,12 @@ def main(conf):
         # Forward the network on the mixture.
         mix, sources = tensors_to_device(test_set[idx], device=model_device)
         est_sources = model(mix[None, None])
-        loss, reordered_sources = loss_func(est_sources, sources[None], return_est=True)
+        loss, reordered_sources = loss_func(
+            est_sources, sources[None], return_est=True, mix_orig=mix[None, None]
+        )
         mix_np = mix[None].cpu().data.numpy()
+        if conf["noise_src"]:
+            sources = sources[:-1, :]
         sources_np = sources.cpu().data.numpy()
         est_sources_np = reordered_sources.squeeze(0).cpu().data.numpy()
         utt_metrics = get_metrics(
@@ -142,6 +152,8 @@ if __name__ == "__main__":
     with open(conf_path) as f:
         train_conf = yaml.safe_load(f)
     arg_dic["sample_rate"] = train_conf["data"]["sample_rate"]
+    arg_dic["noise_src"] = train_conf["data"]["noise_src"]
+    arg_dic["mixture_consistency"] = train_conf["training"]["mixture_consistency"]
     arg_dic["train_conf"] = train_conf
 
     if args.task != arg_dic["train_conf"]["data"]["task"]:

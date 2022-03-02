@@ -38,7 +38,7 @@ nondefault_src=  # If you want to train a network with 3 output streams for exam
 data_dir=data  # Local data directory (No disk space needed)
 
 # Training
-batch_size=32
+batch_size=16
 num_workers=16
 optimizer=adam
 lr=0.001
@@ -97,30 +97,14 @@ expdir=exp/train_dprnn_${tag}
 mkdir -p $expdir && echo $uuid >> $expdir/run_uuid.txt
 echo "Results from the following experiment will be stored in $expdir"
 
-# if [[ $stage -le 3 ]]; then
-#   echo "Stage 3: Training"
-#   mkdir -p logs
-#   CUDA_VISIBLE_DEVICES=$id $python_path train.py \
-# 		--train_dir $train_dir \
-# 		--valid_dir $valid_dir \
-# 		--task $task \
-# 		--sample_rate $sample_rate \
-# 		--lr $lr \
-# 		--weight_decay $weight_decay \
-# 		--epochs $epochs \
-# 		--batch_size $batch_size \
-# 		--kernel_size $kernel_size \
-# 		--stride $stride \
-# 		--n_layers $n_layers \
-# 		--n_units $n_units \
-# 		--exp_dir ${expdir}/ | tee logs/train_${tag}.log
-# 	cp logs/train_${tag}.log $expdir/train.log
-# fi
 if [[ $stage -le 3 ]]; then
   echo "Stage 3: Training"
   mkdir -p logs
   queue-freegpu.pl --mem 4G --gpu 4 --config conf/gpu.conf $expdir/train.log \
     python train.py \
+    --nondefault_nsrc 3 \
+    --noise_src true \
+    --mixture_consistency true \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
     --task $task \

@@ -33,12 +33,14 @@ def main(conf):
         conf["data"]["task"],
         sample_rate=conf["data"]["sample_rate"],
         nondefault_nsrc=conf["data"]["nondefault_nsrc"],
+        noise_src=conf["data"]["noise_src"],
     )
     val_set = WhamRDataset(
         conf["data"]["valid_dir"],
         conf["data"]["task"],
         sample_rate=conf["data"]["sample_rate"],
         nondefault_nsrc=conf["data"]["nondefault_nsrc"],
+        noise_src=conf["data"]["noise_src"],
     )
 
     train_loader = DataLoader(
@@ -75,7 +77,12 @@ def main(conf):
         yaml.safe_dump(conf, outfile)
 
     # Define Loss function.
-    loss_func = PITLossWrapper(pairwise_neg_sisdr, pit_from="pw_mtx")
+    loss_func = PITLossWrapper(
+        pairwise_neg_sisdr,
+        pit_from="pw_mtx",
+        noise_src=conf["data"]["noise_src"],
+        mixture_consistency=conf["training"]["mixture_consistency"],
+    )
     system = System(
         model=model,
         loss_func=loss_func,

@@ -25,6 +25,7 @@ training:
   half_lr: yes
   early_stop: yes
   gradient_clipping: 5
+  mixture_consistency: false
 # Optim config
 optim:
   optimizer: adam
@@ -36,5 +37,6 @@ data:
   valid_dir: data/wav8k/min/cv/
   task: sep_reverb_noisy
   nondefault_nsrc:
+  noise_src: false
   sample_rate: 8000
   mode: min

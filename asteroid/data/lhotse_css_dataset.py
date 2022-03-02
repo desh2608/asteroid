@@ -23,7 +23,13 @@ class LhotseCSSDataset(data.Dataset):
 
     dataset_name = "LhotseCSS"
 
-    def __init__(self, mix_jsonl, src_jsonl, n_src=2, sample_rate=8000):
+    def __init__(
+        self,
+        mix_jsonl,
+        src_jsonl,
+        n_src=2,
+        sample_rate=8000,
+    ):
         super(LhotseCSSDataset, self).__init__()
         # Task setting
         self.mix_jsonl = mix_jsonl
@@ -80,7 +86,11 @@ class LhotseCSSDataset(data.Dataset):
             for idx in cuts.ids
         ]
         targets = []
-        for s, b, l in zip(sources, boundaries, feature_lens.tolist()):
+        for s, b, l in zip(
+            sources,
+            boundaries,
+            feature_lens.tolist(),
+        ):
             # ensure that sources and boundaries are sorted in order of start times
             sources_and_boundaries = sorted(zip(s, b), key=lambda x: x[1][0])
             s, b = zip(*sources_and_boundaries)

@@ -14,7 +14,7 @@ libricss_dir=/exp/draj/corpora/LibriCSS
 rir_dir=data/rirs
 
 # Pretrained model to initialize the DPRNN
-init_model=../../whamr/DPRNN/exp/train_dprnn_sep_reverb_v2/best_model.pth
+init_model=../../whamr/DPRNN/exp/train_dprnn_v4/best_model.pth
 
 # Example usage
 # ./run.sh --stage 3 --tag my_tag --task sep_noisy --id 0,1
@@ -71,14 +71,18 @@ else
   task_affix=_reverb
 fi
 
-if [[ $stage -le 2 ]]; then
-  echo "Stage 2: Training"
+if [[ $stage -le 3 ]]; then
+  echo "Stage 3: Training"
+  # The "clean" versions of the mixtures will be used for mixture consistency loss
   queue-freegpu.pl --mem 8G --gpu 4 --config conf/gpu.conf $expdir/train.log \
     python train.py \
     --train_mix data/librispeech/train-clean-100_mixed${task_affix}.jsonl \
     --train_sources data/librispeech/train-clean-100_sources.jsonl \
     --valid_mix data/librispeech/dev-clean_mixed${task_affix}.jsonl \
     --valid_sources data/librispeech/dev-clean_sources.jsonl \
+    --nondefault_nsrc 3 \
+    --noise_src true \
+    --mixture_consistency true \
     --sample_rate $sample_rate \
     --lr $lr \
     --epochs $epochs \

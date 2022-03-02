@@ -25,6 +25,7 @@ training:
   half_lr: yes
   early_stop: yes
   gradient_clipping: 5
+  mixture_consistency: true
 # Optim config
 optim:
   optimizer: adam
@@ -32,8 +33,10 @@ optim:
   weight_decay: 1.0e-05
 # Data config
 data:
-  train_mix: data/librispeech/train-clean-100_mixed.jsonl
+  train_mix: data/librispeech/train-clean-100_mixed_reverb.jsonl
   train_sources: data/librispeech/train-clean-100_sources.jsonl
   valid_mix: data/librispeech/dev-clean_mixed.jsonl
   valid_sources: data/librispeech/dev-clean_sources.jsonl
-  sample_rate: 8000
+  sample_rate: 16000
+  nondefault_nsrc:
+  noise_src: false

@@ -78,11 +78,20 @@ class WhamRDataset(data.Dataset):
 
     dataset_name = "WHAMR"
 
-    def __init__(self, json_dir, task, sample_rate=8000, segment=4.0, nondefault_nsrc=None):
+    def __init__(
+        self,
+        json_dir,
+        task,
+        sample_rate=8000,
+        segment=4.0,
+        nondefault_nsrc=None,
+        noise_src=False,
+    ):
         super(WhamRDataset, self).__init__()
         if task not in WHAMR_TASKS.keys():
             raise ValueError(
-                "Unexpected task {}, expected one of " "{}".format(task, WHAMR_TASKS.keys())
+                "Unexpected task {}, expected one of "
+                "{}".format(task, WHAMR_TASKS.keys())
             )
         # Task setting
         self.json_dir = json_dir
@@ -95,11 +104,13 @@ class WhamRDataset(data.Dataset):
         else:
             assert nondefault_nsrc >= self.task_dict["default_nsrc"]
             self.n_src = nondefault_nsrc
+        self.noise_src = noise_src  # Add a noise source (mixture - sum of sources)
         self.like_test = self.seg_len is None
         # Load json files
         mix_json = os.path.join(json_dir, self.task_dict["mixture"] + ".json")
         sources_json = [
-            os.path.join(json_dir, source + ".json") for source in self.task_dict["sources"]
+            os.path.join(json_dir, source + ".json")
+            for source in self.task_dict["sources"]
         ]
         with open(mix_json, "r") as f:
             mix_infos = json.load(f)
@@ -165,18 +176,26 @@ class WhamRDataset(data.Dataset):
             stop = rand_start + self.seg_len
         # Load mixture
         x, _ = sf.read(self.mix[idx][0], start=rand_start, stop=stop, dtype="float32")
+        x = torch.from_numpy(x)
         seg_len = torch.as_tensor([len(x)])
         # Load sources
         source_arrays = []
-        for src in self.sources:
+        for i, src in enumerate(self.sources):
             if src[idx] is None:
                 # Target is filled with zeros if n_src > default_nsrc
                 s = np.zeros((seg_len,))
+                if self.noise_src:
+                    noise_idx = i  # We will replace this row with noise source
             else:
-                s, _ = sf.read(src[idx][0], start=rand_start, stop=stop, dtype="float32")
+                s, _ = sf.read(
+                    src[idx][0], start=rand_start, stop=stop, dtype="float32"
+                )
             source_arrays.append(s)
         sources = torch.from_numpy(np.vstack(source_arrays))
-        return torch.from_numpy(x), sources
+        if self.noise_src:
+            sources[i] = x - sources.sum(0)
+
+        return x, sources
 
     def get_infos(self):
         """Get dataset infos (for publishing models).

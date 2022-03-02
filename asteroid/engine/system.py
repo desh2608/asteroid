@@ -99,7 +99,7 @@ class System(pl.LightningModule):
         """
         inputs, targets = batch
         est_targets = self(inputs)
-        loss = self.loss_func(est_targets, targets)
+        loss = self.loss_func(est_targets, targets, mix_orig=inputs)
         return loss
 
     def training_step(self, batch, batch_nb):
@@ -134,7 +134,9 @@ class System(pl.LightningModule):
         """Log hp_metric to tensorboard for hparams selection."""
         hp_metric = self.trainer.callback_metrics.get("val_loss", None)
         if hp_metric is not None:
-            self.trainer.logger.log_metrics({"hp_metric": hp_metric}, step=self.trainer.global_step)
+            self.trainer.logger.log_metrics(
+                {"hp_metric": hp_metric}, step=self.trainer.global_step
+            )
 
     def configure_optimizers(self):
         """Initialize optimizers, batch-wise and epoch-wise schedulers."""

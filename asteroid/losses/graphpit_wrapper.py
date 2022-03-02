@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from graph_pit.loss.optimized import optimized_graph_pit_source_aggregated_sdr_loss
+from asteroid.dsp.consistency import mixture_consistency
 
 
 class GraphPITLossWrapper(nn.Module):
@@ -9,9 +10,14 @@ class GraphPITLossWrapper(nn.Module):
 
     Args:
         assignment_solver (str) : The assignment solver to use. (default: 'optimal_dynamic_programming')
+        mixture_consistency_loss (bool) : Whether to use the mixture consistency. (default: False)
     """
 
-    def __init__(self, assignment_solver="optimal_dynamic_programming"):
+    def __init__(
+        self,
+        assignment_solver="optimal_dynamic_programming",
+        mixture_consistency=False,
+    ):
         super().__init__()
         assert assignment_solver in [
             "optimal_brute_force",
@@ -21,8 +27,9 @@ class GraphPITLossWrapper(nn.Module):
             "greedy_cop",
         ]
         self.assignment_solver = assignment_solver
+        self.mixture_consistency = mixture_consistency
 
-    def forward(self, est_targets, targets, return_est=False):
+    def forward(self, est_targets, targets, return_est=False, mix_orig=None):
         """Evaluate the loss using Graph-PIT algorithm.
 
         Args:
@@ -43,6 +50,10 @@ class GraphPITLossWrapper(nn.Module):
         """
         B = est_targets.shape[0]
         losses = torch.zeros(B)
+
+        if self.mixture_consistency:
+            est_targets = mixture_consistency(mix_orig, est_targets, dim=1)[:, :-1, ...]
+
         for i in range(len(est_targets)):
             est_target = est_targets[i]
             sources = targets[i]["sources"]
